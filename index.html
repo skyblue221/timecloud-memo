@@ -305,8 +305,8 @@
 </div>
 
 <div class="tab-wrap">
-  <button class="tab active" onclick="showTab('input')">✏️ 새 메모</button>
-  <button class="tab" onclick="showTab('records')">📋 기록 보기</button>
+  <button class="tab active" id="main-tab-input" onclick="showTab('input')">✏️ 새 메모</button>
+  <button class="tab" id="main-tab-records" onclick="showTab('records')">📋 기록 보기</button>
 </div>
 
 <!-- 입력 탭 -->
@@ -376,9 +376,8 @@
   function showTab(tab) {
     document.getElementById('tab-input').style.display = tab === 'input' ? 'block' : 'none';
     document.getElementById('tab-records').style.display = tab === 'records' ? 'block' : 'none';
-    document.querySelectorAll('.tab-wrap:first-of-type .tab').forEach((el, i) => {
-      el.classList.toggle('active', (i === 0 && tab === 'input') || (i === 1 && tab === 'records'));
-    });
+    document.getElementById('main-tab-input').classList.toggle('active', tab === 'input');
+    document.getElementById('main-tab-records').classList.toggle('active', tab === 'records');
     if (tab === 'records') renderRecords();
   }
 
@@ -441,6 +440,14 @@
     setTimeout(() => t.classList.remove('show'), 2200);
   }
 
+  function deleteRecord(index) {
+    if (!confirm('이 기록을 삭제할까요?')) return;
+    const records = getRecords();
+    records.splice(index, 1);
+    localStorage.setItem('tc_records', JSON.stringify(records));
+    renderRecords();
+  }
+
   function renderRecords() {
     const list = document.getElementById('recordsList');
     const records = getRecords();
@@ -452,11 +459,14 @@
         </div>`;
       return;
     }
-    list.innerHTML = records.map(r => `
+    list.innerHTML = records.map((r, i) => `
       <div class="record-item ${r.type}">
         <div class="record-meta">
           <span class="record-name">${r.name}</span>
-          <span class="record-tag ${r.type}">${r.type}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="record-tag ${r.type}">${r.type}</span>
+            <button onclick="deleteRecord(${i})" style="background:none;border:none;color:#bbb;font-size:16px;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
+          </div>
         </div>
         <div class="record-date">${r.date}</div>
         <div class="record-content">${r.story}</div>
