@@ -260,7 +260,25 @@
   }
   .record-next::before { content: '→ '; }
 
-  .empty-state {
+  .edit-banner {
+    margin: 0 20px 0;
+    background: #fff8e1;
+    border: 1.5px solid #ffe082;
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #795548;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .edit-banner button {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 13px;
+    cursor: pointer;
+  }
     text-align: center;
     padding: 60px 20px;
     color: var(--ink-light);
@@ -311,7 +329,13 @@
 
 <!-- 입력 탭 -->
 <div id="tab-input">
-  <div class="form-card">
+  <!-- 편집 중 배너 -->
+<div class="edit-banner" id="editBanner">
+  ✏️ 기록을 수정하고 있어요
+  <button onclick="cancelEdit()">취소</button>
+</div>
+
+<div class="form-card">
 
     <div class="field">
       <label>구분</label>
@@ -356,6 +380,8 @@
 <div class="toast" id="toast">✅ 저장되었어요</div>
 
 <script>
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgr475ebsm_tn6gu5b3oGu2n4YIy8oJzfSQOI0GurmdNYkwB-KDroVFQuqZmx5bNNHxw/exec';
+
   // ── 날짜 기본값 ──
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -366,6 +392,8 @@
 
   // ── 구분 선택 ──
   let selectedType = '참여자';
+  let editingIndex = null; // 편집 중인 행 인덱스
+
   function selectType(type) {
     selectedType = type;
     document.getElementById('type-참여자').classList.toggle('active', type === '참여자');
@@ -381,24 +409,16 @@
     if (tab === 'records') renderRecords();
   }
 
-  // ── 로컬 저장 ──
-  function getRecords() {
-    return JSON.parse(localStorage.getItem('tc_records') || '[]');
-  }
-  function saveRecord(record) {
-    const records = getRecords();
-    records.unshift(record);
-    localStorage.setItem('tc_records', JSON.stringify(records));
-  }
-
-  // ── 구글 시트 연동 URL (Apps Script 배포 후 여기에 입력) ──
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgr475ebsm_tn6gu5b3oGu2n4YIy8oJzfSQOI0GurmdNYkwB-KDroVFQuqZmx5bNNHxw/exec';
-
+  // ── 저장 / 수정 ──
   async function submitMemo() {
     const name = document.getElementById('name').value.trim();
     const story = document.getElementById('story').value.trim();
-    if (!name) { alert('이름을 입력해주세요'); return; }
+    if (!name) { alert('이름을 입력해주세요'); return;  }
     if (!story) { alert('나눈 이야기를 입력해주세요'); return; }
+
+    const btn = document.querySelector('.btn-submit');
+    btn.textContent = '저장 중...';
+    btn.disabled = true;
 
     const record = {
       date: document.getElementById('date').value,
@@ -406,73 +426,114 @@
       type: selectedType,
       story,
       next: document.getElementById('next').value.trim(),
-      saved: new Date().toISOString()
     };
 
-    // 로컬 저장 (항상)
-    saveRecord(record);
-
-    // 구글 시트 전송 (URL 있을 때만)
-    if (SCRIPT_URL) {
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          body: JSON.stringify(record)
-        });
-      } catch(e) {
-        console.log('시트 전송 실패, 로컬에는 저장됨');
+    try {
+      if (editingIndex !== null) {
+        // 수정 모드
+        record.action = 'update';
+        record.index = editingIndex;
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
+        editingIndex = null;
+        btn.textContent = '저장하기';
+        document.getElementById('editBanner').style.display = 'none';
+      } else {
+        // 새 저장
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(record) });
       }
+    } catch(e) {
+      console.log('전송 실패');
     }
 
-    // 초기화
+    // 폼 초기화
     document.getElementById('name').value = '';
     document.getElementById('story').value = '';
     document.getElementById('next').value = '';
     document.getElementById('date').value = todayStr;
     selectType('참여자');
+    btn.textContent = '저장하기';
+    btn.disabled = false;
 
-    showToast();
+    showToast(editingIndex !== null ? '✅ 수정되었어요' : '✅ 저장되었어요');
   }
 
-  function showToast() {
+  // ── 편집 시작 ──
+  function editRecord(index, r) {
+    editingIndex = index;
+    document.getElementById('date').value = r.date || todayStr;
+    document.getElementById('name').value = r.name || '';
+    document.getElementById('story').value = r.story || '';
+    document.getElementById('next').value = r.next || '';
+    selectType(r.type || '참여자');
+    document.querySelector('.btn-submit').textContent = '수정 저장';
+    document.getElementById('editBanner').style.display = 'block';
+    showTab('input');
+    window.scrollTo(0, 0);
+  }
+
+  function cancelEdit() {
+    editingIndex = null;
+    document.getElementById('name').value = '';
+    document.getElementById('story').value = '';
+    document.getElementById('next').value = '';
+    document.getElementById('date').value = todayStr;
+    selectType('참여자');
+    document.querySelector('.btn-submit').textContent = '저장하기';
+    document.getElementById('editBanner').style.display = 'none';
+  }
+
+  // ── 삭제 ──
+  async function deleteRecord(index) {
+    if (!confirm('이 기록을 삭제할까요?')) return;
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'delete', index })
+      });
+      renderRecords();
+    } catch(e) {
+      alert('삭제 실패. 다시 시도해주세요.');
+    }
+  }
+
+  // ── 기록 불러오기 & 렌더링 ──
+  async function renderRecords() {
+    const list = document.getElementById('recordsList');
+    list.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>불러오는 중...</p></div>`;
+    try {
+      const res = await fetch(SCRIPT_URL);
+      const records = await res.json();
+      if (!records.length) {
+        list.innerHTML = `<div class="empty-state"><div class="icon">🌿</div><p>아직 기록이 없어요.<br>첫 메모를 남겨보세요.</p></div>`;
+        return;
+      }
+      // 최신순 정렬
+      const sorted = [...records].reverse();
+      list.innerHTML = sorted.map(r => `
+        <div class="record-item ${r.type}">
+          <div class="record-meta">
+            <span class="record-name">${r.name}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="record-tag ${r.type}">${r.type}</span>
+              <button onclick='editRecord(${r.index}, ${JSON.stringify(r)})' style="background:none;border:none;color:#52b788;font-size:14px;cursor:pointer;padding:0 2px;">✏️</button>
+              <button onclick="deleteRecord(${r.index})" style="background:none;border:none;color:#bbb;font-size:14px;cursor:pointer;padding:0 2px;">✕</button>
+            </div>
+          </div>
+          <div class="record-date">${r.date}</div>
+          <div class="record-content">${r.story}</div>
+          ${r.next ? `<div class="record-next">${r.next}</div>` : ''}
+        </div>
+      `).join('');
+    } catch(e) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>불러오기 실패.<br>잠시 후 다시 시도해주세요.</p></div>`;
+    }
+  }
+
+  function showToast(msg) {
     const t = document.getElementById('toast');
+    t.textContent = msg || '✅ 저장되었어요';
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2200);
-  }
-
-  function deleteRecord(index) {
-    if (!confirm('이 기록을 삭제할까요?')) return;
-    const records = getRecords();
-    records.splice(index, 1);
-    localStorage.setItem('tc_records', JSON.stringify(records));
-    renderRecords();
-  }
-
-  function renderRecords() {
-    const list = document.getElementById('recordsList');
-    const records = getRecords();
-    if (!records.length) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="icon">🌿</div>
-          <p>아직 기록이 없어요.<br>첫 메모를 남겨보세요.</p>
-        </div>`;
-      return;
-    }
-    list.innerHTML = records.map((r, i) => `
-      <div class="record-item ${r.type}">
-        <div class="record-meta">
-          <span class="record-name">${r.name}</span>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="record-tag ${r.type}">${r.type}</span>
-            <button onclick="deleteRecord(${i})" style="background:none;border:none;color:#bbb;font-size:16px;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
-          </div>
-        </div>
-        <div class="record-date">${r.date}</div>
-        <div class="record-content">${r.story}</div>
-        ${r.next ? `<div class="record-next">${r.next}</div>` : ''}
-      </div>
-    `).join('');
   }
 </script>
 </body>
