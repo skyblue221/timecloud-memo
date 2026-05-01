@@ -519,7 +519,7 @@
               <button onclick="deleteRecord(${r.index})" style="background:none;border:none;color:#bbb;font-size:14px;cursor:pointer;padding:0 2px;">✕</button>
             </div>
           </div>
-          <div class="record-date">${r.date}</div>
+          <div class="record-date">${formatDate(r.date)}</div>
           <div class="record-content">${r.story}</div>
           ${r.next ? `<div class="record-next">${r.next}</div>` : ''}
         </div>
@@ -529,7 +529,12 @@
     }
   }
 
-  function showToast(msg) {
+  function formatDate(val) {
+    if (!val) return '';
+    const d = new Date(val);
+    if (isNaN(d)) return val;
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
     const t = document.getElementById('toast');
     t.textContent = msg || '✅ 저장되었어요';
     t.classList.add('show');
