@@ -70,6 +70,8 @@
     background: var(--green-pale);
     border-radius: var(--radius);
     padding: 4px;
+    position: relative;
+    z-index: 10;
   }
   .main-tab {
     flex: 1;
@@ -83,6 +85,8 @@
     color: var(--green-mid);
     cursor: pointer;
     transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   .main-tab.active {
     background: var(--green-mid);
@@ -144,6 +148,8 @@
     color: var(--green-mid);
     cursor: pointer;
     transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   .type-tab.active {
     background: var(--green-mid);
